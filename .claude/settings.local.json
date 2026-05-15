@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Skill(to-prd)",
-      "Skill(to-prd:*)"
+      "Skill(to-prd:*)",
+      "Bash(npm install *)",
+      "Bash(npm list *)"
     ]
   }
 }

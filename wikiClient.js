@@ -4,7 +4,7 @@ class WikiClient {
   constructor(baseUrl, apiToken) {
     if (!baseUrl) throw new Error('baseUrl is required');
     if (!apiToken) throw new Error('apiToken is required');
-    this.graphqlUrl = `${baseUrl}/graphql`;
+    this.graphqlUrl = `${baseUrl.trim()}/graphql`;
     this.headers = {
       Authorization: `Bearer ${apiToken}`,
       'Content-Type': 'application/json',

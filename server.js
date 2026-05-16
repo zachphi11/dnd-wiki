@@ -8,7 +8,7 @@ const { analyzeNotes } = require('./noteProcessor');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const WIKIJS_INTERNAL_URL = process.env.WIKIJS_INTERNAL_URL;
+const WIKIJS_INTERNAL_URL = (process.env.WIKIJS_INTERNAL_URL || '').trim();
 
 if (!WIKIJS_INTERNAL_URL) {
   console.error('FATAL: WIKIJS_INTERNAL_URL environment variable is required');

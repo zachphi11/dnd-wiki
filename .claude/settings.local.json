@@ -4,7 +4,13 @@
       "Skill(to-prd)",
       "Skill(to-prd:*)",
       "Bash(npm install *)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)",
+      "Bash(node node_modules/jest/bin/jest.js __tests__/uploadRoutes.test.js)",
+      "Bash(node node_modules/jest/bin/jest.js __tests__/noteProcessor.test.js)",
+      "Bash(node node_modules/jest/bin/jest.js)",
+      "Bash(node node_modules/jest/bin/jest.js __tests__/applyRoute.test.js)"
     ]
   }
 }

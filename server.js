@@ -28,8 +28,6 @@ const anthropic =
 
 app.locals.wikiClient = wikiClient;
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Upload routes ---
@@ -38,7 +36,7 @@ app.get('/upload', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'upload.html'));
 });
 
-app.post('/upload/analyze', async (req, res) => {
+app.post('/upload/analyze', express.json(), express.urlencoded({ extended: true }), async (req, res) => {
   const { notes } = req.body;
   if (!notes || !notes.trim()) {
     return res.status(400).json({ error: 'notes are required' });
@@ -57,7 +55,7 @@ app.post('/upload/analyze', async (req, res) => {
   }
 });
 
-app.post('/upload/apply', async (req, res) => {
+app.post('/upload/apply', express.json(), express.urlencoded({ extended: true }), async (req, res) => {
   const { proposals } = req.body;
   if (!Array.isArray(proposals) || proposals.length === 0) {
     return res.status(400).json({ error: 'proposals array is required' });

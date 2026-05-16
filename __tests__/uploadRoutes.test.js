@@ -43,9 +43,9 @@ describe('Upload routes', () => {
       expect(res.text).toContain('<textarea');
     });
 
-    test('response contains a submit button', async () => {
+    test('response contains an analyze/submit button', async () => {
       const res = await request(app).get('/upload');
-      expect(res.text).toMatch(/type=.submit/);
+      expect(res.text).toMatch(/analyze-btn|type=.submit/i);
     });
   });
 

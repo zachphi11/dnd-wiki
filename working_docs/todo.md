@@ -10,7 +10,7 @@
 - [X] 3. wikiClient Module + Integration Tests (AFK) — blocked by task 1
 - [X] 4. Note Upload Form — Input & Loading States (AFK) — blocked by task 2
 - [X] 5. noteProcessor — Two-Phase Claude Analysis + Unit Tests (AFK) — blocked by task 3
-- [ ] 6. Diff Review UI + Apply Route — Complete Upload Flow (AFK) — blocked by tasks 4 and 5
+- [X] 6. Diff Review UI + Apply Route — Complete Upload Flow (AFK) — blocked by tasks 4 and 5
 
 ---
 

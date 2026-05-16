@@ -13,7 +13,7 @@
       font-family: 'Georgia', serif;
       min-height: 100vh;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       padding: 2rem;
     }
@@ -24,7 +24,8 @@
       border-radius: 6px;
       padding: 2.5rem;
       width: 100%;
-      max-width: 700px;
+      max-width: 800px;
+      margin-top: 2rem;
     }
 
     h1 {
@@ -33,6 +34,8 @@
       margin-bottom: 0.4rem;
       letter-spacing: 0.04em;
     }
+
+    h2 { font-size: 1.15rem; color: #d4c89a; margin-bottom: 0.3rem; }
 
     p.subtitle {
       font-size: 0.9rem;
@@ -66,7 +69,7 @@
 
     textarea:focus { border-color: #c9a84c88; }
 
-    button[type="submit"] {
+    button.btn-primary {
       margin-top: 1.2rem;
       background: #c9a84c;
       color: #1a1510;
@@ -81,14 +84,11 @@
       transition: background 0.15s;
     }
 
-    button[type="submit"]:hover { background: #e0bc60; }
-    button[type="submit"]:disabled { background: #5a4e30; color: #8c7b5a; cursor: not-allowed; }
+    button.btn-primary:hover { background: #e0bc60; }
+    button.btn-primary:disabled { background: #5a4e30; color: #8c7b5a; cursor: not-allowed; }
 
     /* Loading state */
-    #state-loading {
-      text-align: center;
-      padding: 3rem 0;
-    }
+    #state-loading { text-align: center; padding: 3rem 0; }
 
     .spinner {
       display: inline-block;
@@ -103,54 +103,331 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #state-loading p {
+    #state-loading p { color: #8c7b5a; font-style: italic; }
+
+    /* Review state */
+    .empty-notice {
       color: #8c7b5a;
       font-style: italic;
+      padding: 2rem 0;
+      text-align: center;
     }
 
-    /* Visibility helpers */
+    .proposal {
+      border: 1px solid #c9a84c33;
+      border-radius: 5px;
+      padding: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .proposal-header {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+
+    .badge-update { background: #2a5a2a; color: #7fc97f; }
+    .badge-create { background: #1a3a5a; color: #7fbcd4; }
+
+    .rationale {
+      font-size: 0.88rem;
+      color: #a89870;
+      font-style: italic;
+      margin-bottom: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .diff-section { display: flex; gap: 1rem; margin-bottom: 0.8rem; }
+
+    .diff-pane {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .diff-pane-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8c7b5a;
+      margin-bottom: 0.3rem;
+    }
+
+    .diff-pane pre {
+      background: #14110e;
+      border: 1px solid #c9a84c22;
+      border-radius: 3px;
+      padding: 0.8rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #d4c89a;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .diff-pane.before pre { border-color: #6b3333; }
+    .diff-pane.after pre { border-color: #336b33; }
+
+    .approve-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.6rem;
+    }
+
+    .approve-row input[type="checkbox"] { accent-color: #c9a84c; width: 1.1rem; height: 1.1rem; cursor: pointer; }
+    .approve-row label { font-size: 0.9rem; color: #a89870; cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; }
+
+    /* Success state */
+    #state-success ul { list-style: none; padding: 0; margin: 1rem 0; }
+    #state-success li { margin: 0.4rem 0; }
+    #state-success a { color: #c9a84c; }
+
+    .error-text { color: #d47c7c; font-size: 0.9rem; margin-top: 0.5rem; }
+
+    /* Visibility */
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="card">
 
-    <!-- Input state -->
+    <!-- State 1: Input -->
     <div id="state-input">
       <h1>Upload Session Notes</h1>
       <p class="subtitle">Paste your session notes below. Claude will identify which wiki pages to update and propose changes for your review.</p>
 
-      <form id="upload-form" action="/upload/analyze" method="POST">
-        <label for="notes">Session Notes</label>
-        <textarea
-          id="notes"
-          name="notes"
-          placeholder="The party arrived at Stormhaven under cover of night…"
-          required
-        ></textarea>
+      <label for="notes">Session Notes</label>
+      <textarea
+        id="notes"
+        name="notes"
+        placeholder="The party arrived at Stormhaven under cover of night…"
+      ></textarea>
 
-        <button type="submit" id="submit-btn">Analyze Notes</button>
-      </form>
+      <button type="button" class="btn-primary" id="analyze-btn">Analyze Notes</button>
+      <p id="input-error" class="error-text hidden"></p>
     </div>
 
-    <!-- Loading state -->
+    <!-- State 2: Loading -->
     <div id="state-loading" class="hidden">
       <div class="spinner"></div>
       <p>Claude is reading your notes and identifying wiki changes&hellip;</p>
     </div>
 
+    <!-- State 3: Review -->
+    <div id="state-review" class="hidden">
+      <h1>Review Proposed Changes</h1>
+      <p class="subtitle" id="review-subtitle"></p>
+
+      <div id="proposals-list"></div>
+
+      <button type="button" class="btn-primary" id="apply-btn">Apply Approved Changes</button>
+      <p id="apply-error" class="error-text hidden"></p>
+    </div>
+
+    <!-- State 4: Success -->
+    <div id="state-success" class="hidden">
+      <h1>Changes Applied</h1>
+      <p class="subtitle" id="success-subtitle"></p>
+      <ul id="success-list"></ul>
+      <div id="success-errors"></div>
+      <button type="button" class="btn-primary" id="back-btn" style="margin-top:1.5rem">Upload Another</button>
+    </div>
+
   </div>
 
   <script>
-    const form = document.getElementById('upload-form');
-    const inputState = document.getElementById('state-input');
-    const loadingState = document.getElementById('state-loading');
-    const submitBtn = document.getElementById('submit-btn');
+    const stateInput   = document.getElementById('state-input');
+    const stateLoading = document.getElementById('state-loading');
+    const stateReview  = document.getElementById('state-review');
+    const stateSuccess = document.getElementById('state-success');
 
-    form.addEventListener('submit', () => {
-      submitBtn.disabled = true;
-      inputState.classList.add('hidden');
-      loadingState.classList.remove('hidden');
+    function show(el) {
+      [stateInput, stateLoading, stateReview, stateSuccess].forEach(s => s.classList.add('hidden'));
+      el.classList.remove('hidden');
+    }
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // --- Analyze ---
+
+    document.getElementById('analyze-btn').addEventListener('click', async () => {
+      const notes = document.getElementById('notes').value.trim();
+      const errEl = document.getElementById('input-error');
+      errEl.classList.add('hidden');
+
+      if (!notes) {
+        errEl.textContent = 'Please paste some session notes before analyzing.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      show(stateLoading);
+
+      try {
+        const res = await fetch('/upload/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notes }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server error ${res.status}`);
+        }
+
+        const { proposals } = await res.json();
+        renderReview(proposals);
+      } catch (err) {
+        show(stateInput);
+        errEl.textContent = `Analysis failed: ${err.message}`;
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    function renderReview(proposals) {
+      const list = document.getElementById('proposals-list');
+      const subtitle = document.getElementById('review-subtitle');
+      list.innerHTML = '';
+
+      if (!proposals || proposals.length === 0) {
+        subtitle.textContent = 'Claude found no wiki pages that need updating for these notes.';
+        document.getElementById('apply-btn').classList.add('hidden');
+        show(stateReview);
+        return;
+      }
+
+      subtitle.textContent = `${proposals.length} proposed change${proposals.length > 1 ? 's' : ''} — approve or reject each, then click Apply.`;
+      document.getElementById('apply-btn').classList.remove('hidden');
+
+      proposals.forEach((p, i) => {
+        const action = p.action === 'create' ? 'NEW' : 'UPDATE';
+        const badgeClass = p.action === 'create' ? 'badge-create' : 'badge-update';
+
+        const div = document.createElement('div');
+        div.className = 'proposal';
+        div.dataset.proposal = JSON.stringify(p);
+        div.innerHTML = `
+          <div class="proposal-header">
+            <span class="badge ${badgeClass}">${action}</span>
+            <h2>${escHtml(p.title || p.slug)}</h2>
+          </div>
+          <p class="rationale">${escHtml(p.rationale || '')}</p>
+          <div class="diff-section">
+            <div class="diff-pane before">
+              <div class="diff-pane-label">Before</div>
+              <pre>${escHtml(p.current_content || '(new page)')}</pre>
+            </div>
+            <div class="diff-pane after">
+              <div class="diff-pane-label">After</div>
+              <pre>${escHtml(p.proposed_content || '')}</pre>
+            </div>
+          </div>
+          <div class="approve-row">
+            <input type="checkbox" id="approve-${i}" class="approve-cb" checked>
+            <label for="approve-${i}">Approve this change</label>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+
+      show(stateReview);
+    }
+
+    // --- Apply ---
+
+    document.getElementById('apply-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('apply-error');
+      errEl.classList.add('hidden');
+
+      const approved = [];
+      document.querySelectorAll('.proposal').forEach((el, i) => {
+        const cb = el.querySelector('.approve-cb');
+        if (cb && cb.checked) {
+          approved.push(JSON.parse(el.dataset.proposal));
+        }
+      });
+
+      if (approved.length === 0) {
+        errEl.textContent = 'No changes selected. Check at least one proposal to apply.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('apply-btn').disabled = true;
+      show(stateLoading);
+
+      try {
+        const res = await fetch('/upload/apply', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ proposals: approved }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Server error ${res.status}`);
+        }
+
+        const { applied, errors } = await res.json();
+        renderSuccess(applied, errors);
+      } catch (err) {
+        show(stateReview);
+        document.getElementById('apply-btn').disabled = false;
+        errEl.textContent = `Apply failed: ${err.message}`;
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    function renderSuccess(applied, errors) {
+      const subtitle = document.getElementById('success-subtitle');
+      const list = document.getElementById('success-list');
+      const errDiv = document.getElementById('success-errors');
+      list.innerHTML = '';
+      errDiv.innerHTML = '';
+
+      subtitle.textContent = `${applied.length} change${applied.length !== 1 ? 's' : ''} applied successfully.`;
+
+      applied.forEach(p => {
+        const li = document.createElement('li');
+        li.innerHTML = `&#10003; <a href="/${p.slug}" target="_blank">${escHtml(p.title)}</a>`;
+        list.appendChild(li);
+      });
+
+      if (errors && errors.length > 0) {
+        errDiv.innerHTML = `<p class="error-text" style="margin-top:1rem">${errors.length} change${errors.length !== 1 ? 's' : ''} could not be applied:</p>`;
+        errors.forEach(e => {
+          const p = document.createElement('p');
+          p.className = 'error-text';
+          p.textContent = `  ${e.title}: ${e.error}`;
+          errDiv.appendChild(p);
+        });
+      }
+
+      show(stateSuccess);
+    }
+
+    // --- Reset ---
+
+    document.getElementById('back-btn').addEventListener('click', () => {
+      document.getElementById('notes').value = '';
+      document.getElementById('input-error').classList.add('hidden');
+      document.getElementById('apply-btn').disabled = false;
+      show(stateInput);
     });
   </script>
 </body>

@@ -12,7 +12,8 @@ function buildPageListText(pages) {
 
 function parseJSON(text, phase) {
   try {
-    return JSON.parse(text.trim());
+    const stripped = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    return JSON.parse(stripped);
   } catch {
     throw new Error(`Phase ${phase} returned invalid JSON: ${text.slice(0, 120)}`);
   }

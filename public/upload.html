@@ -180,6 +180,56 @@
     .diff-pane.before pre { border-color: #6b3333; }
     .diff-pane.after pre { border-color: #336b33; }
 
+    .diff-pane.after textarea {
+      background: #14110e;
+      border: 1px solid #336b33;
+      border-radius: 3px;
+      padding: 0.8rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #d4c89a;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 80px;
+      max-height: 220px;
+      overflow-y: auto;
+      width: 100%;
+      resize: vertical;
+      outline: none;
+    }
+    .diff-pane.after textarea:focus { border-color: #55aa55; }
+
+    .badge-edited { background: #3a3a1a; color: #c9c97f; }
+
+    .title-edit-row { margin-bottom: 0.8rem; }
+    .title-edit-row label {
+      display: block;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #8c7b5a;
+      margin-bottom: 0.3rem;
+    }
+    .title-edit-row input {
+      width: 100%;
+      background: #14110e;
+      border: 1px solid #c9a84c44;
+      border-radius: 3px;
+      color: #d4c89a;
+      font-family: 'Georgia', serif;
+      font-size: 0.95rem;
+      padding: 0.4rem 0.6rem;
+      outline: none;
+    }
+    .title-edit-row input:focus { border-color: #c9a84c88; }
+    .slug-preview {
+      font-size: 0.75rem;
+      color: #8c7b5a;
+      margin-top: 0.3rem;
+      font-family: 'Courier New', monospace;
+    }
+
     .approve-row {
       display: flex;
       align-items: center;
@@ -248,6 +298,7 @@
 
   </div>
 
+  <script src="/slugify.js"></script>
   <script>
     const stateInput   = document.getElementById('state-input');
     const stateLoading = document.getElementById('state-loading');
@@ -318,23 +369,32 @@
         const action = p.action === 'create' ? 'NEW' : 'UPDATE';
         const badgeClass = p.action === 'create' ? 'badge-create' : 'badge-update';
 
+        const titleEditRow = p.action === 'create' ? `
+          <div class="title-edit-row">
+            <label for="title-edit-${i}">Page Title</label>
+            <input type="text" id="title-edit-${i}" class="title-edit" value="${escHtml(p.title || '')}">
+            <div class="slug-preview">URL: /${escHtml(p.slug)}</div>
+          </div>` : '';
+
         const div = document.createElement('div');
         div.className = 'proposal';
         div.dataset.proposal = JSON.stringify(p);
         div.innerHTML = `
           <div class="proposal-header">
             <span class="badge ${badgeClass}">${action}</span>
-            <h2>${escHtml(p.title || p.slug)}</h2>
+            <h2 class="proposal-title">${escHtml(p.title || p.slug)}</h2>
+            <span class="badge badge-edited hidden edited-badge">Edited</span>
           </div>
           <p class="rationale">${escHtml(p.rationale || '')}</p>
+          ${titleEditRow}
           <div class="diff-section">
             <div class="diff-pane before">
               <div class="diff-pane-label">Before</div>
               <pre>${escHtml(p.current_content || '(new page)')}</pre>
             </div>
             <div class="diff-pane after">
-              <div class="diff-pane-label">After</div>
-              <pre>${escHtml(p.proposed_content || '')}</pre>
+              <div class="diff-pane-label">After (editable)</div>
+              <textarea class="proposed-edit">${escHtml(p.proposed_content || '')}</textarea>
             </div>
           </div>
           <div class="approve-row">
@@ -343,6 +403,23 @@
           </div>
         `;
         list.appendChild(div);
+
+        const markEdited = () => div.querySelector('.edited-badge').classList.remove('hidden');
+        div.querySelector('.proposed-edit').addEventListener('input', markEdited);
+
+        if (p.action === 'create') {
+          const titleInput = div.querySelector('.title-edit');
+          const slugPreview = div.querySelector('.slug-preview');
+          const h2 = div.querySelector('.proposal-title');
+          titleInput.addEventListener('input', () => {
+            markEdited();
+            h2.textContent = titleInput.value || p.slug;
+            const newSlug = slugify(titleInput.value, p.slug);
+            slugPreview.textContent = 'URL: /' + newSlug;
+            div.dataset.currentSlug = newSlug;
+            div.dataset.currentTitle = titleInput.value;
+          });
+        }
       });
 
       show(stateReview);
@@ -355,10 +432,19 @@
       errEl.classList.add('hidden');
 
       const approved = [];
-      document.querySelectorAll('.proposal').forEach((el, i) => {
+      document.querySelectorAll('.proposal').forEach((el) => {
         const cb = el.querySelector('.approve-cb');
         if (cb && cb.checked) {
-          approved.push(JSON.parse(el.dataset.proposal));
+          const proposal = JSON.parse(el.dataset.proposal);
+          proposal.proposed_content = el.querySelector('.proposed-edit').value;
+          if (proposal.action === 'create') {
+            const titleInput = el.querySelector('.title-edit');
+            if (titleInput) {
+              proposal.title = titleInput.value || proposal.title;
+              proposal.slug = el.dataset.currentSlug || proposal.slug;
+            }
+          }
+          approved.push(proposal);
         }
       });
 

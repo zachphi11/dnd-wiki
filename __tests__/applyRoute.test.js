@@ -27,7 +27,7 @@ function buildApp(wikiClientOverride) {
         if (p.action === 'create') {
           await wikiClient.createPage(p.slug, p.title, p.proposed_content);
         } else {
-          await wikiClient.updatePage(p.pageId, p.proposed_content);
+          await wikiClient.updatePage(p.pageId, p.proposed_content, p.slug || null);
         }
         applied.push({ pageId: p.pageId, title: p.title, slug: p.slug });
       } catch (err) {
@@ -76,7 +76,7 @@ describe('POST /upload/apply', () => {
       });
 
     expect(res.status).toBe(200);
-    expect(mockWiki.updatePage).toHaveBeenCalledWith(1, '# Aria\n\nUpdated.');
+    expect(mockWiki.updatePage).toHaveBeenCalledWith(1, '# Aria\n\nUpdated.', 'npcs/aria');
     expect(res.body.applied).toHaveLength(1);
     expect(res.body.applied[0].title).toBe('Aria');
     expect(res.body.errors).toHaveLength(0);

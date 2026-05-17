@@ -76,3 +76,45 @@ describe('WikiClient constructor', () => {
     expect(() => new WikiClient('http://example.com', null)).toThrow('apiToken is required');
   });
 });
+
+describe('WikiClient updatePage unit', () => {
+  const axios = require('axios');
+
+  const existingPage = { id: 5, path: 'npcs/aria', title: 'Aria', content: '# Aria' };
+
+  function mockAxiosPost(responseData) {
+    jest.spyOn(axios, 'post').mockResolvedValue({ data: responseData });
+  }
+
+  afterEach(() => jest.restoreAllMocks());
+
+  test('uses original path when no newPath is provided', async () => {
+    const client = new WikiClient('http://wiki.test', 'tok');
+    mockAxiosPost({
+      data: { pages: { single: existingPage } },
+    });
+    mockAxiosPost({
+      data: { pages: { update: { responseResult: { succeeded: true }, page: { id: 5, path: 'npcs/aria', title: 'Aria' } } } },
+    });
+    jest.spyOn(axios, 'post')
+      .mockResolvedValueOnce({ data: { data: { pages: { single: existingPage } } } })
+      .mockResolvedValueOnce({ data: { data: { pages: { update: { responseResult: { succeeded: true }, page: { id: 5, path: 'npcs/aria', title: 'Aria' } } } } } });
+
+    await client.updatePage(5, 'new content');
+
+    const updateCall = axios.post.mock.calls[1];
+    expect(updateCall[1].variables.path).toBe('npcs/aria');
+  });
+
+  test('uses newPath in the mutation when provided', async () => {
+    const client = new WikiClient('http://wiki.test', 'tok');
+    jest.spyOn(axios, 'post')
+      .mockResolvedValueOnce({ data: { data: { pages: { single: existingPage } } } })
+      .mockResolvedValueOnce({ data: { data: { pages: { update: { responseResult: { succeeded: true }, page: { id: 5, path: 'villains/aria', title: 'Aria' } } } } } });
+
+    await client.updatePage(5, 'new content', 'villains/aria');
+
+    const updateCall = axios.post.mock.calls[1];
+    expect(updateCall[1].variables.path).toBe('villains/aria');
+  });
+});

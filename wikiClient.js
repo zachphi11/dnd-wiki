@@ -99,7 +99,7 @@ class WikiClient {
     return result.page;
   }
 
-  async updatePage(id, content) {
+  async updatePage(id, content, newPath = null) {
     const page = await this.getPage(id);
     if (!page) throw new Error(`Page ${id} not found`);
 
@@ -128,7 +128,7 @@ class WikiClient {
         isPrivate: false,
         isPublished: true,
         locale: 'en',
-        path: page.path,
+        path: newPath || page.path,
         tags: [],
         title: page.title,
       }

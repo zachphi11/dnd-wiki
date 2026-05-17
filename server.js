@@ -74,7 +74,7 @@ app.post('/upload/apply', express.json(), express.urlencoded({ extended: true })
       if (p.action === 'create') {
         await wc.createPage(p.slug, p.title, p.proposed_content);
       } else {
-        await wc.updatePage(p.pageId, p.proposed_content);
+        await wc.updatePage(p.pageId, p.proposed_content, p.slug || null);
       }
       applied.push({ pageId: p.pageId, title: p.title, slug: p.slug });
     } catch (err) {

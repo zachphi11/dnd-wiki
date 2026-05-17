@@ -229,6 +229,36 @@
       margin-top: 0.3rem;
       font-family: 'Courier New', monospace;
     }
+    .slug-input-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .slug-prefix {
+      background: #14110e;
+      border: 1px solid #c9a84c44;
+      border-right: none;
+      border-radius: 3px 0 0 3px;
+      color: #8c7b5a;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95rem;
+      padding: 0.4rem 0.4rem 0.4rem 0.6rem;
+      line-height: 1;
+    }
+    .slug-edit {
+      flex: 1;
+      background: #14110e;
+      border: 1px solid #c9a84c44;
+      border-left: none;
+      border-radius: 0 3px 3px 0;
+      color: #d4c89a;
+      font-family: 'Courier New', monospace;
+      font-size: 0.95rem;
+      padding: 0.4rem 0.6rem;
+      outline: none;
+      min-width: 0;
+    }
+    .slug-edit:focus { border-color: #c9a84c88; }
 
     .approve-row {
       display: flex;
@@ -373,8 +403,16 @@
           <div class="title-edit-row">
             <label for="title-edit-${i}">Page Title</label>
             <input type="text" id="title-edit-${i}" class="title-edit" value="${escHtml(p.title || '')}">
-            <div class="slug-preview">URL: /${escHtml(p.slug)}</div>
           </div>` : '';
+
+        const slugEditRow = `
+          <div class="title-edit-row">
+            <label for="slug-edit-${i}">URL Path</label>
+            <div class="slug-input-wrapper">
+              <span class="slug-prefix">/</span>
+              <input type="text" id="slug-edit-${i}" class="slug-edit" value="${escHtml(p.slug || '')}">
+            </div>
+          </div>`;
 
         const div = document.createElement('div');
         div.className = 'proposal';
@@ -387,6 +425,7 @@
           </div>
           <p class="rationale">${escHtml(p.rationale || '')}</p>
           ${titleEditRow}
+          ${slugEditRow}
           <div class="diff-section">
             <div class="diff-pane before">
               <div class="diff-pane-label">Before</div>
@@ -407,17 +446,25 @@
         const markEdited = () => div.querySelector('.edited-badge').classList.remove('hidden');
         div.querySelector('.proposed-edit').addEventListener('input', markEdited);
 
+        const slugInput = div.querySelector('.slug-edit');
+        slugInput.addEventListener('input', () => {
+          markEdited();
+          div.dataset.currentSlug = slugInput.value;
+          slugInput.dataset.userEdited = 'true';
+        });
+
         if (p.action === 'create') {
           const titleInput = div.querySelector('.title-edit');
-          const slugPreview = div.querySelector('.slug-preview');
           const h2 = div.querySelector('.proposal-title');
           titleInput.addEventListener('input', () => {
             markEdited();
             h2.textContent = titleInput.value || p.slug;
-            const newSlug = slugify(titleInput.value, p.slug);
-            slugPreview.textContent = 'URL: /' + newSlug;
-            div.dataset.currentSlug = newSlug;
             div.dataset.currentTitle = titleInput.value;
+            if (!slugInput.dataset.userEdited) {
+              const newSlug = slugify(titleInput.value, p.slug);
+              slugInput.value = newSlug;
+              div.dataset.currentSlug = newSlug;
+            }
           });
         }
       });
@@ -437,11 +484,11 @@
         if (cb && cb.checked) {
           const proposal = JSON.parse(el.dataset.proposal);
           proposal.proposed_content = el.querySelector('.proposed-edit').value;
+          proposal.slug = el.dataset.currentSlug || proposal.slug;
           if (proposal.action === 'create') {
             const titleInput = el.querySelector('.title-edit');
             if (titleInput) {
               proposal.title = titleInput.value || proposal.title;
-              proposal.slug = el.dataset.currentSlug || proposal.slug;
             }
           }
           approved.push(proposal);

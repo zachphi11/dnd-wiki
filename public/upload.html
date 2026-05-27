@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload Session Notes — D&amp;D Wiki</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -26,7 +27,10 @@
       width: 100%;
       max-width: 800px;
       margin-top: 2rem;
+      transition: max-width 0.35s ease;
     }
+
+    .card.review-wide { max-width: 1300px; }
 
     h1 {
       font-size: 1.6rem;
@@ -147,59 +151,193 @@
       line-height: 1.5;
     }
 
-    .diff-section { display: flex; gap: 1rem; margin-bottom: 0.8rem; }
+    /* Diff layout */
+    .diff-section { display: flex; gap: 1.2rem; margin-bottom: 0.8rem; }
 
     .diff-pane {
       flex: 1;
       min-width: 0;
     }
 
-    .diff-pane-label {
-      font-size: 0.75rem;
+    /* Tab strip */
+    .pane-tabs {
+      display: flex;
+      border-bottom: 1px solid #c9a84c22;
+      margin-bottom: 0;
+    }
+
+    .pane-tab {
+      font-family: 'Georgia', serif;
+      font-size: 0.72rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       color: #8c7b5a;
-      margin-bottom: 0.3rem;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 0.3rem 0.75rem;
+      margin-bottom: -1px;
+      cursor: pointer;
+      transition: color 0.12s;
     }
 
-    .diff-pane pre {
+    .pane-tab:hover { color: #d4c89a; }
+
+    .diff-pane.before .pane-tab.active {
+      color: #c97f7f;
+      border-bottom-color: #c97f7f;
+    }
+
+    .diff-pane.after .pane-tab.active {
+      color: #7fc97f;
+      border-bottom-color: #7fc97f;
+    }
+
+    /* Shared pane body styles */
+    .pane-preview,
+    .pane-raw,
+    .pane-edit {
       background: #14110e;
-      border: 1px solid #c9a84c22;
       border-radius: 3px;
-      padding: 0.8rem;
-      font-family: 'Courier New', monospace;
-      font-size: 0.8rem;
-      line-height: 1.5;
-      color: #d4c89a;
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 220px;
+      padding: 0.9rem 1rem;
+      min-height: 180px;
+      max-height: 520px;
       overflow-y: auto;
     }
 
-    .diff-pane.before pre { border-color: #6b3333; }
-    .diff-pane.after pre { border-color: #336b33; }
+    /* Before pane — red border */
+    .diff-pane.before .pane-preview,
+    .diff-pane.before .pane-raw {
+      border: 1px solid #6b3333;
+    }
 
-    .diff-pane.after textarea {
-      background: #14110e;
+    /* After pane — green border */
+    .diff-pane.after .pane-preview,
+    .diff-pane.after .pane-edit {
       border: 1px solid #336b33;
-      border-radius: 3px;
-      padding: 0.8rem;
+    }
+
+    .diff-pane.after .pane-edit:focus { border-color: #55aa55; }
+
+    /* Raw source view */
+    .pane-raw {
       font-family: 'Courier New', monospace;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       line-height: 1.5;
       color: #d4c89a;
       white-space: pre-wrap;
       word-break: break-word;
-      min-height: 80px;
-      max-height: 220px;
-      overflow-y: auto;
+    }
+
+    /* Edit textarea */
+    .pane-edit {
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: #d4c89a;
+      white-space: pre-wrap;
+      word-break: break-word;
       width: 100%;
       resize: vertical;
       outline: none;
     }
-    .diff-pane.after textarea:focus { border-color: #55aa55; }
 
+    /* Rendered markdown preview */
+    .pane-preview {
+      font-family: 'Georgia', serif;
+      font-size: 0.88rem;
+      line-height: 1.75;
+      color: #d4c89a;
+    }
+
+    .pane-preview h1,
+    .pane-preview h2,
+    .pane-preview h3,
+    .pane-preview h4 {
+      color: #c9a84c;
+      margin: 0.9rem 0 0.35rem;
+      letter-spacing: 0.03em;
+    }
+
+    .pane-preview h1 { font-size: 1.2rem; }
+    .pane-preview h2 { font-size: 1.05rem; }
+    .pane-preview h3 { font-size: 0.95rem; }
+    .pane-preview h4 { font-size: 0.88rem; }
+
+    .pane-preview p { margin: 0 0 0.65rem; }
+
+    .pane-preview ul,
+    .pane-preview ol { padding-left: 1.5rem; margin: 0 0 0.65rem; }
+
+    .pane-preview li { margin: 0.2rem 0; }
+
+    .pane-preview strong { color: #e8ddb0; }
+
+    .pane-preview em { color: #b8a888; font-style: italic; }
+
+    .pane-preview code {
+      background: #1e1a14;
+      border: 1px solid #c9a84c22;
+      padding: 0.1em 0.35em;
+      border-radius: 2px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.82em;
+      color: #c9c07a;
+    }
+
+    .pane-preview pre {
+      background: #1e1a14;
+      border: 1px solid #c9a84c22;
+      border-radius: 3px;
+      padding: 0.65rem 0.8rem;
+      overflow-x: auto;
+      margin: 0 0 0.65rem;
+    }
+
+    .pane-preview pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.82em;
+    }
+
+    .pane-preview blockquote {
+      border-left: 3px solid #c9a84c55;
+      padding-left: 0.9rem;
+      margin: 0 0 0.65rem;
+      color: #a89870;
+      font-style: italic;
+    }
+
+    .pane-preview hr {
+      border: none;
+      border-top: 1px solid #c9a84c33;
+      margin: 0.8rem 0;
+    }
+
+    .pane-preview table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 0 0 0.65rem;
+      font-size: 0.85em;
+    }
+
+    .pane-preview th,
+    .pane-preview td {
+      border: 1px solid #c9a84c33;
+      padding: 0.3rem 0.6rem;
+      text-align: left;
+    }
+
+    .pane-preview th { color: #c9a84c; background: #1a1510; }
+
+    .pane-preview .empty-placeholder {
+      color: #5a4e30;
+      font-style: italic;
+      font-size: 0.85rem;
+    }
+
+    /* Badge & form rows */
     .badge-edited { background: #3a3a1a; color: #c9c97f; }
 
     .title-edit-row { margin-bottom: 0.8rem; }
@@ -223,12 +361,7 @@
       outline: none;
     }
     .title-edit-row input:focus { border-color: #c9a84c88; }
-    .slug-preview {
-      font-size: 0.75rem;
-      color: #8c7b5a;
-      margin-top: 0.3rem;
-      font-family: 'Courier New', monospace;
-    }
+
     .slug-input-wrapper {
       display: flex;
       align-items: center;
@@ -344,14 +477,38 @@
     const stateLoading = document.getElementById('state-loading');
     const stateReview  = document.getElementById('state-review');
     const stateSuccess = document.getElementById('state-success');
+    const card         = document.querySelector('.card');
 
     function show(el) {
       [stateInput, stateLoading, stateReview, stateSuccess].forEach(s => s.classList.add('hidden'));
       el.classList.remove('hidden');
+      // Widen the card only during the review step
+      card.classList.toggle('review-wide', el === stateReview);
     }
 
     function escHtml(s) {
       return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderMarkdown(content) {
+      if (!content || !content.trim()) {
+        return '<span class="empty-placeholder">(new page)</span>';
+      }
+      return marked.parse(content);
+    }
+
+    // Wire up tab strips for a single diff-pane element.
+    // tabMap: { tabName: element, ... }
+    function wireTabs(paneEl, tabMap) {
+      paneEl.querySelectorAll('.pane-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          paneEl.querySelectorAll('.pane-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          Object.entries(tabMap).forEach(([name, el]) => {
+            el.classList.toggle('hidden', tab.dataset.tab !== name);
+          });
+        });
+      });
     }
 
     // --- Analyze ---
@@ -438,12 +595,20 @@
           ${slugEditRow}
           <div class="diff-section">
             <div class="diff-pane before">
-              <div class="diff-pane-label">Before</div>
-              <pre>${escHtml(p.current_content || '(new page)')}</pre>
+              <div class="pane-tabs">
+                <button class="pane-tab active" data-tab="preview">Preview</button>
+                <button class="pane-tab" data-tab="raw">Raw</button>
+              </div>
+              <div class="pane-preview"></div>
+              <pre class="pane-raw hidden"></pre>
             </div>
             <div class="diff-pane after">
-              <div class="diff-pane-label">After (editable)</div>
-              <textarea class="proposed-edit">${escHtml(p.proposed_content || '')}</textarea>
+              <div class="pane-tabs">
+                <button class="pane-tab active" data-tab="preview">Preview</button>
+                <button class="pane-tab" data-tab="edit">Edit</button>
+              </div>
+              <div class="pane-preview"></div>
+              <textarea class="proposed-edit pane-edit hidden"></textarea>
             </div>
           </div>
           <div class="approve-row">
@@ -453,8 +618,46 @@
         `;
         list.appendChild(div);
 
+        // Grab elements
+        const beforePane     = div.querySelector('.diff-pane.before');
+        const afterPane      = div.querySelector('.diff-pane.after');
+        const beforePreview  = beforePane.querySelector('.pane-preview');
+        const beforeRaw      = beforePane.querySelector('.pane-raw');
+        const afterPreview   = afterPane.querySelector('.pane-preview');
+        const afterTextarea  = afterPane.querySelector('.proposed-edit');
+
+        // Populate content
+        beforeRaw.textContent = p.current_content || '(new page)';
+        afterTextarea.value   = p.proposed_content || '';
+
+        // Render initial markdown previews
+        beforePreview.innerHTML = renderMarkdown(p.current_content);
+        afterPreview.innerHTML  = renderMarkdown(p.proposed_content);
+
+        // Wire Before tabs: Preview | Raw
+        wireTabs(beforePane, { preview: beforePreview, raw: beforeRaw });
+
+        // Wire After tabs: Preview | Edit
+        // Re-render preview from textarea when switching back to Preview
+        afterPane.querySelectorAll('.pane-tab').forEach(tab => {
+          tab.addEventListener('click', () => {
+            afterPane.querySelectorAll('.pane-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            if (tab.dataset.tab === 'preview') {
+              afterPreview.innerHTML = renderMarkdown(afterTextarea.value);
+              afterPreview.classList.remove('hidden');
+              afterTextarea.classList.add('hidden');
+            } else {
+              afterPreview.classList.add('hidden');
+              afterTextarea.classList.remove('hidden');
+              afterTextarea.focus();
+            }
+          });
+        });
+
+        // Track edits
         const markEdited = () => div.querySelector('.edited-badge').classList.remove('hidden');
-        div.querySelector('.proposed-edit').addEventListener('input', markEdited);
+        afterTextarea.addEventListener('input', markEdited);
 
         const slugInput = div.querySelector('.slug-edit');
         slugInput.addEventListener('input', () => {

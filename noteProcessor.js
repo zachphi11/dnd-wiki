@@ -88,9 +88,11 @@ async function analyzeNotes(notes, wikiClient, anthropic) {
   // Phase 2: fetch affected page content and generate proposals
   const ids = mergedIds;
   const affectedPages = await Promise.all(ids.map((id) => wikiClient.getPage(id)));
-  const pageContext = affectedPages
-    .filter(Boolean)
-    .map((p) => `--- Page ID ${p.id}: "${p.title}" ---\n${p.content}`)
+  const affectedPagesFiltered = affectedPages.filter(Boolean);
+  const pageById = Object.fromEntries(affectedPagesFiltered.map((p) => [String(p.id), p]));
+
+  const pageContext = affectedPagesFiltered
+    .map((p) => `--- Page ID ${p.id}: "${p.title}" (path: ${p.path}) ---\n${p.content}`)
     .join('\n\n');
 
   const existingPagesNote = hasNewPages
@@ -116,7 +118,17 @@ async function analyzeNotes(notes, wikiClient, anthropic) {
     throw new Error(`Phase 2 response is not an array: ${phase2Text.slice(0, 120)}`);
   }
 
-  return proposals;
+  // For update proposals, always use the actual page path from the wiki — never trust
+  // Claude's slug guess, which won't include subdirectory prefixes like "players/".
+  return proposals.map((proposal) => {
+    if (proposal.action === 'update' && proposal.pageId != null) {
+      const page = pageById[String(proposal.pageId)];
+      if (page?.path) {
+        return { ...proposal, slug: page.path };
+      }
+    }
+    return proposal;
+  });
 }
 
 module.exports = { analyzeNotes, findExactPageMatches };

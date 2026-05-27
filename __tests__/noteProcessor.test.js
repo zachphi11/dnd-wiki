@@ -1,4 +1,4 @@
-const { analyzeNotes, findExactPageMatches } = require('../noteProcessor');
+const { analyzeNotes, findExactPageMatches, validatePhase1, validatePhase2 } = require('../noteProcessor');
 
 // --- Mock helpers ---
 
@@ -46,13 +46,27 @@ const NOTES = 'The party met Aria the Merchant in Stormhaven. She revealed she i
 // Notes that don't match any existing page titles — for testing "no affected pages" paths
 const NEUTRAL_NOTES = 'The party delved into a dungeon filled with ancient traps and found treasure.';
 
-// --- Tests ---
+// Minimal valid proposal fixture
+function makeProposal(overrides = {}) {
+  return {
+    action: 'update',
+    pageId: 1,
+    slug: 'npcs/aria',
+    title: 'Aria the Merchant',
+    current_content: '# Aria',
+    proposed_content: '# Aria\n\nUpdated.',
+    rationale: 'New info.',
+    ...overrides,
+  };
+}
+
+// --- analyzeNotes integration tests ---
 
 describe('analyzeNotes', () => {
   test('returns empty array when no pages are affected', async () => {
     const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [] }),
+      JSON.stringify({ affected_page_ids: [], has_new_pages: false }),
       '{}'
     );
 
@@ -78,7 +92,7 @@ describe('analyzeNotes', () => {
       },
     ]);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [1] }),
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
       phase2Payload
     );
 
@@ -114,7 +128,7 @@ describe('analyzeNotes', () => {
       },
     ]);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [1, 2] }),
+      JSON.stringify({ affected_page_ids: [1, 2], has_new_pages: false }),
       phase2Payload
     );
 
@@ -129,7 +143,7 @@ describe('analyzeNotes', () => {
   test('phase 2 is not called when phase 1 returns no affected pages and pre-check finds no matches', async () => {
     const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [] }),
+      JSON.stringify({ affected_page_ids: [], has_new_pages: false }),
       'should not be called'
     );
 
@@ -142,7 +156,7 @@ describe('analyzeNotes', () => {
   test('phase 1 uses cache_control on the page list block', async () => {
     const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [] }),
+      JSON.stringify({ affected_page_ids: [], has_new_pages: false }),
       '{}'
     );
 
@@ -173,7 +187,7 @@ describe('analyzeNotes', () => {
       },
     ]);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [1] }),
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
       phase2Payload
     );
 
@@ -194,7 +208,7 @@ describe('analyzeNotes', () => {
   test('throws a clear error when phase 2 returns malformed JSON', async () => {
     const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
     const anthropic = makeAnthropicClient(
-      JSON.stringify({ affected_page_ids: [1] }),
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
       'not json at all'
     );
 
@@ -260,7 +274,246 @@ describe('analyzeNotes', () => {
     expect(wikiClient.getPage).toHaveBeenCalledTimes(1);
     expect(wikiClient.getPage).toHaveBeenCalledWith(2);
   });
+
+  // --- Few-shot prompt content ---
+
+  test('phase 1 prompt includes few-shot examples', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [], has_new_pages: false }),
+      '{}'
+    );
+    await analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic);
+
+    const phase1Call = anthropic.messages.create.mock.calls[0][0];
+    const allText = phase1Call.messages
+      .flatMap((m) => (Array.isArray(m.content) ? m.content.map((b) => b.text) : [m.content]))
+      .join('\n');
+
+    expect(allText).toMatch(/Example A/);
+    expect(allText).toMatch(/Example B/);
+    expect(allText).toMatch(/Example C/);
+    expect(allText).toMatch(/"has_new_pages": false/);
+    expect(allText).toMatch(/"has_new_pages": true/);
+  });
+
+  test('phase 2 prompt includes few-shot example with both update and create', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const phase2Payload = JSON.stringify([
+      makeProposal({ pageId: 1, slug: 'npcs/aria', title: 'Aria the Merchant',
+        current_content: CONTENT_MAP[1].content, proposed_content: CONTENT_MAP[1].content + '\n\nNew info.' }),
+    ]);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
+      phase2Payload
+    );
+    await analyzeNotes(NOTES, wikiClient, anthropic);
+
+    const phase2Call = anthropic.messages.create.mock.calls[1][0];
+    const prompt = typeof phase2Call.messages[0].content === 'string'
+      ? phase2Call.messages[0].content
+      : phase2Call.messages[0].content.map((b) => b.text).join('\n');
+
+    expect(prompt).toMatch(/"action": "update"/);
+    expect(prompt).toMatch(/"action": "create"/);
+    expect(prompt).toMatch(/"pageId": null/);
+  });
+
+  // --- Phase 1 validation (via analyzeNotes) ---
+
+  test('throws when phase 1 response is missing affected_page_ids', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ has_new_pages: false }),
+      '{}'
+    );
+    await expect(analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /affected_page_ids/
+    );
+  });
+
+  test('throws when phase 1 affected_page_ids is not an array', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: 'oops', has_new_pages: false }),
+      '{}'
+    );
+    await expect(analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /affected_page_ids.*array/i
+    );
+  });
+
+  test('throws when phase 1 affected_page_ids contains non-integers', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: ['1', '2'], has_new_pages: false }),
+      '{}'
+    );
+    await expect(analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /integers/i
+    );
+  });
+
+  test('throws when phase 1 response is missing has_new_pages', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [] }),
+      '{}'
+    );
+    await expect(analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /has_new_pages/
+    );
+  });
+
+  test('throws when phase 1 has_new_pages is not a boolean', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [], has_new_pages: 'yes' }),
+      '{}'
+    );
+    await expect(analyzeNotes(NEUTRAL_NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /has_new_pages.*boolean/i
+    );
+  });
+
+  // --- Phase 2 validation (via analyzeNotes) ---
+
+  test('throws when a phase 2 proposal is missing a required field', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const badProposal = { action: 'update', pageId: 1, slug: 'npcs/aria', title: 'Aria the Merchant',
+      current_content: '# Aria', proposed_content: '# Aria\n\nUpdated.' /* missing rationale */ };
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
+      JSON.stringify([badProposal])
+    );
+    await expect(analyzeNotes(NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /rationale/
+    );
+  });
+
+  test('throws when a phase 2 proposal has an invalid action', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
+      JSON.stringify([makeProposal({ action: 'delete' })])
+    );
+    await expect(analyzeNotes(NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /action.*update.*create|update.*create.*action/i
+    );
+  });
+
+  test('throws when a phase 2 string field is not a string', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
+      JSON.stringify([makeProposal({ rationale: 42 })])
+    );
+    await expect(analyzeNotes(NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /rationale.*string|string.*rationale/i
+    );
+  });
+
+  test('throws when a phase 2 pageId is neither a number nor null', async () => {
+    const wikiClient = makeWikiClient(PAGES, CONTENT_MAP);
+    const anthropic = makeAnthropicClient(
+      JSON.stringify({ affected_page_ids: [1], has_new_pages: false }),
+      JSON.stringify([makeProposal({ pageId: 'npcs/aria' })])
+    );
+    await expect(analyzeNotes(NOTES, wikiClient, anthropic)).rejects.toThrow(
+      /pageId.*integer.*null|integer.*null.*pageId/i
+    );
+  });
 });
+
+// --- validatePhase1 unit tests ---
+
+describe('validatePhase1', () => {
+  const raw = 'raw text';
+
+  test('accepts valid data', () => {
+    expect(() => validatePhase1({ affected_page_ids: [1, 2], has_new_pages: true }, raw)).not.toThrow();
+    expect(() => validatePhase1({ affected_page_ids: [], has_new_pages: false }, raw)).not.toThrow();
+  });
+
+  test('throws when affected_page_ids is missing', () => {
+    expect(() => validatePhase1({ has_new_pages: false }, raw)).toThrow(/affected_page_ids/);
+  });
+
+  test('throws when affected_page_ids is not an array', () => {
+    expect(() => validatePhase1({ affected_page_ids: 1, has_new_pages: false }, raw)).toThrow(/array/i);
+  });
+
+  test('throws when affected_page_ids contains a string', () => {
+    expect(() => validatePhase1({ affected_page_ids: ['1'], has_new_pages: false }, raw)).toThrow(/integers/i);
+  });
+
+  test('throws when affected_page_ids contains a float', () => {
+    expect(() => validatePhase1({ affected_page_ids: [1.5], has_new_pages: false }, raw)).toThrow(/integers/i);
+  });
+
+  test('throws when has_new_pages is missing', () => {
+    expect(() => validatePhase1({ affected_page_ids: [] }, raw)).toThrow(/has_new_pages/);
+  });
+
+  test('throws when has_new_pages is not a boolean', () => {
+    expect(() => validatePhase1({ affected_page_ids: [], has_new_pages: 1 }, raw)).toThrow(/boolean/i);
+  });
+});
+
+// --- validatePhase2 unit tests ---
+
+describe('validatePhase2', () => {
+  const raw = 'raw text';
+
+  test('accepts a valid update proposal', () => {
+    expect(() => validatePhase2([makeProposal()], raw)).not.toThrow();
+  });
+
+  test('accepts a valid create proposal', () => {
+    expect(() =>
+      validatePhase2([makeProposal({ action: 'create', pageId: null, current_content: '' })], raw)
+    ).not.toThrow();
+  });
+
+  test('accepts an empty array', () => {
+    expect(() => validatePhase2([], raw)).not.toThrow();
+  });
+
+  test('throws when response is not an array', () => {
+    expect(() => validatePhase2({}, raw)).toThrow(/array/i);
+  });
+
+  REQUIRED_PROPOSAL_FIELDS_FOR_TEST = [
+    'action', 'pageId', 'slug', 'title', 'current_content', 'proposed_content', 'rationale',
+  ];
+
+  for (const field of ['action', 'pageId', 'slug', 'title', 'current_content', 'proposed_content', 'rationale']) {
+    test(`throws when proposal is missing field "${field}"`, () => {
+      const proposal = makeProposal();
+      delete proposal[field];
+      expect(() => validatePhase2([proposal], raw)).toThrow(new RegExp(field));
+    });
+  }
+
+  test('throws when action is not "update" or "create"', () => {
+    expect(() => validatePhase2([makeProposal({ action: 'patch' })], raw)).toThrow(/action/i);
+  });
+
+  test('throws when a string field is not a string', () => {
+    expect(() => validatePhase2([makeProposal({ slug: 123 })], raw)).toThrow(/slug.*string|string.*slug/i);
+    expect(() => validatePhase2([makeProposal({ rationale: null })], raw)).toThrow(/rationale.*string|string.*rationale/i);
+  });
+
+  test('throws when pageId is not a number or null', () => {
+    expect(() => validatePhase2([makeProposal({ pageId: 'npcs/aria' })], raw)).toThrow(/pageId/i);
+  });
+
+  test('accepts pageId as null for an update (defensive — allows null if page lookup fails gracefully)', () => {
+    expect(() => validatePhase2([makeProposal({ pageId: null })], raw)).not.toThrow();
+  });
+});
+
+// --- findExactPageMatches unit tests ---
 
 describe('findExactPageMatches', () => {
   const pages = [

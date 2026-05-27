@@ -277,6 +277,15 @@
 
     .error-text { color: #d47c7c; font-size: 0.9rem; margin-top: 0.5rem; }
 
+    .paste-notice {
+      font-size: 0.82rem;
+      color: #7fc97f;
+      margin-top: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
     /* Visibility */
     .hidden { display: none !important; }
   </style>
@@ -295,6 +304,7 @@
         name="notes"
         placeholder="The party arrived at Stormhaven under cover of night…"
       ></textarea>
+      <p id="paste-notice" class="paste-notice hidden"></p>
 
       <button type="button" class="btn-primary" id="analyze-btn">Analyze Notes</button>
       <p id="input-error" class="error-text hidden"></p>
@@ -559,8 +569,151 @@
     document.getElementById('back-btn').addEventListener('click', () => {
       document.getElementById('notes').value = '';
       document.getElementById('input-error').classList.add('hidden');
+      document.getElementById('paste-notice').classList.add('hidden');
       document.getElementById('apply-btn').disabled = false;
       show(stateInput);
+    });
+
+    // --- Paste: preserve rich-text formatting as Markdown ---
+
+    /**
+     * Convert a DOM node to Markdown text.
+     * Called recursively; listDepth tracks nesting for indented lists.
+     */
+    function domToMarkdown(node, listDepth) {
+      listDepth = listDepth || 0;
+
+      // Plain text node
+      if (node.nodeType === 3) {
+        // Collapse whitespace but don't trim — surrounding elements handle spacing
+        return node.textContent.replace(/[ \t\r\n]+/g, ' ');
+      }
+
+      if (node.nodeType !== 1) return ''; // skip comments, etc.
+
+      const tag = node.tagName.toLowerCase();
+
+      // Skip non-content nodes
+      if (['script', 'style', 'head', 'meta', 'link'].includes(tag)) return '';
+
+      const children = (depth) =>
+        Array.from(node.childNodes).map(c => domToMarkdown(c, depth !== undefined ? depth : listDepth)).join('');
+
+      switch (tag) {
+        case 'h1': return `# ${children().trim()}\n\n`;
+        case 'h2': return `## ${children().trim()}\n\n`;
+        case 'h3': return `### ${children().trim()}\n\n`;
+        case 'h4': return `#### ${children().trim()}\n\n`;
+        case 'h5': return `##### ${children().trim()}\n\n`;
+        case 'h6': return `###### ${children().trim()}\n\n`;
+
+        case 'p': {
+          const text = children().trim();
+          return text ? `${text}\n\n` : '';
+        }
+
+        case 'br': return '\n';
+        case 'hr': return '\n---\n\n';
+
+        case 'strong':
+        case 'b': {
+          const inner = children().trim();
+          return inner ? `**${inner}**` : '';
+        }
+
+        case 'em':
+        case 'i': {
+          const inner = children().trim();
+          return inner ? `*${inner}*` : '';
+        }
+
+        case 'code': return `\`${children()}\``;
+
+        case 'pre': {
+          const inner = children().trim();
+          return `\`\`\`\n${inner}\n\`\`\`\n\n`;
+        }
+
+        case 'blockquote': {
+          const inner = children().trim();
+          return inner.split('\n').map(l => `> ${l}`).join('\n') + '\n\n';
+        }
+
+        case 'a': return children(); // keep link text, drop URL
+
+        case 'ul':
+        case 'ol': {
+          const indent = '  '.repeat(listDepth);
+          let num = 0;
+          const lines = [];
+          for (const child of node.childNodes) {
+            if (child.nodeType !== 1) continue;
+            if (child.tagName.toLowerCase() !== 'li') continue;
+            num++;
+            const bullet = tag === 'ol' ? `${num}.` : '-';
+            // Render the li contents; nested lists will pick up listDepth + 1 naturally
+            const content = domToMarkdown(child, listDepth + 1).trim();
+            // The first line of content gets the bullet; subsequent lines get indented
+            const contentLines = content.split('\n');
+            lines.push(`${indent}${bullet} ${contentLines[0]}`);
+            for (let i = 1; i < contentLines.length; i++) {
+              if (contentLines[i].trim()) lines.push(`${indent}  ${contentLines[i]}`);
+              else if (i < contentLines.length - 1) lines.push(''); // preserve blank lines between sub-items
+            }
+          }
+          return lines.join('\n') + '\n\n';
+        }
+
+        case 'li': return children(); // handled by parent ul/ol
+
+        case 'table': {
+          // Minimal table support: header row + data rows
+          const rows = Array.from(node.querySelectorAll('tr'));
+          if (!rows.length) return children();
+          const renderRow = row =>
+            '| ' + Array.from(row.querySelectorAll('th, td')).map(cell => domToMarkdown(cell, listDepth).trim()).join(' | ') + ' |';
+          const header = renderRow(rows[0]);
+          const sep = '| ' + Array.from(rows[0].querySelectorAll('th, td')).map(() => '---').join(' | ') + ' |';
+          const body = rows.slice(1).map(renderRow);
+          return [header, sep, ...body].join('\n') + '\n\n';
+        }
+
+        default:
+          return children(); // div, span, section, article, etc. — just recurse
+      }
+    }
+
+    function htmlToMarkdown(html) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return domToMarkdown(doc.body)
+        .replace(/[ \t]+\n/g, '\n')    // trailing spaces on lines
+        .replace(/\n{3,}/g, '\n\n')    // collapse 3+ blank lines to 2
+        .trim();
+    }
+
+    document.getElementById('notes').addEventListener('paste', (e) => {
+      const html = e.clipboardData && e.clipboardData.getData('text/html');
+      if (!html || !html.trim()) return; // no rich text — let browser handle normally
+
+      e.preventDefault();
+
+      const md = htmlToMarkdown(html);
+      if (!md) return; // conversion produced nothing useful, fall back to default
+
+      // Insert at cursor position (replaces selection if any)
+      const ta = e.target;
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      const before = ta.value.slice(0, start);
+      const after  = ta.value.slice(end);
+      ta.value = before + md + after;
+      const cursor = start + md.length;
+      ta.setSelectionRange(cursor, cursor);
+
+      // Show confirmation badge
+      const notice = document.getElementById('paste-notice');
+      notice.textContent = '✓ Formatting preserved as Markdown';
+      notice.classList.remove('hidden');
     });
   </script>
 </body>

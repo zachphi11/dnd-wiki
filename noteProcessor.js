@@ -48,7 +48,7 @@ async function analyzeNotes(notes, wikiClient, anthropic) {
           },
           {
             type: 'text',
-            text: `Session notes:\n\n${notes}\n\nReturn JSON with two fields:\n- "affected_page_ids": IDs of existing pages that need updating (empty array if none)\n- "has_new_pages": true if the notes introduce any new entities (characters, locations, items, factions, etc.) that do not have an existing page yet, false otherwise\n\nExample: {"affected_page_ids": [1, 2], "has_new_pages": false}`,
+            text: `Session notes (may be formatted as Markdown — headings and bullet points indicate distinct topics and entities):\n\n${notes}\n\nReturn JSON with two fields:\n- "affected_page_ids": IDs of existing pages that need updating (empty array if none)\n- "has_new_pages": true if the notes introduce any new entities (characters, locations, items, factions, etc.) that do not have an existing page yet, false otherwise\n\nExample: {"affected_page_ids": [1, 2], "has_new_pages": false}`,
           },
         ],
       },
@@ -82,7 +82,7 @@ async function analyzeNotes(notes, wikiClient, anthropic) {
     messages: [
       {
         role: 'user',
-        content: `Session notes:\n\n${notes}\n\nCurrent content of affected pages:\n\n${pageContext}${existingPagesNote}\n\nReturn a JSON array of proposed changes. Each item must have: action ("update" or "create"), pageId (null for new pages), slug (string), title (string), current_content (string, empty for new pages), proposed_content (string), rationale (string).`,
+        content: `Session notes (may be formatted as Markdown — headings and bullet points indicate distinct topics and entities):\n\n${notes}\n\nCurrent content of affected pages:\n\n${pageContext}${existingPagesNote}\n\nReturn a JSON array of proposed changes. Each item must have: action ("update" or "create"), pageId (null for new pages), slug (string), title (string), current_content (string, empty for new pages), proposed_content (string), rationale (string).`,
       },
     ],
   });
